@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# This script will start an interactive PBS shell.
+#
+# Usage: pbs_shell [-c <num-cpus>] [-m <memory-in-gb>] [-w <walltime>] [-p <project>]
+#
+# Options:
+#
+# -c:	Number of CPUs
+# -m:	Amount of memory, in GB
+# -w:	Maximum walltime, in hh:mm:ss
+# -p:	Project allocation to be used for the job
+# -h:	Display this help info
+#
+
+set -euo pipefail
+
+NCPU=1
+MEM_GB=8
+WALLTIME=01:00:00
+PROJECT=vl59
+
+USAGE="Usage: pbs_shell [-c <num-cpus>] [-m <memory-in-gb>] [-w <walltime>] [-p <project>] [-h]
+
+Options:
+
+-c:		Number of CPUs (default: ${NCPU})
+-m:		Desired memory allocation, in GB (default: ${MEM_GB})
+-w:		Maximum walltime, in hh:mm:ss (default: ${WALLTIME})
+-p:		Project allocation to be used for the job (default: ${PROJECT})
+-h:		Display this help info"
+
+# Parse the command line arguments
+while getopts ":c:m:w:p:h" opt; do
+    case $opt in
+	c ) NCPU=${OPTARG}; test ${NCPU} -gt 0 2>/dev/null || (echo -e "Invalid number of cpus: ${NCPU}\n${USAGE}"; exit 1) ;;
+	m ) MEM_GB=${OPTARG}; test ${MEM_GB} -gt 0 2>/dev/null || (echo -e "Invalid amount of memory: ${MEM_GB}\n${USAGE}"; exit 1) ;;
+	w ) WALLTIME=${OPTARG}; [[ "${WALLTIME}" =~ ^[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}$ ]] || (echo -e "Invalid walltime: ${WALLTIME}\n${USAGE}"; exit 1) ;;
+	p ) PROJECT="${OPTARG}" ;;
+	h ) echo "${USAGE}"; exit 0 ;;
+	? ) echo -e "Unknown option ${OPTARG}\n${USAGE}"; exit 1
+    esac
+done
+
+# Ensure there are no remaining unparsed arguments.
+shift $(expr ${OPTIND} - 1 )
+if [ $# -gt 0 ]
+then
+	echo "Unknown options: $@"
+	echo "${USAGE}"
+	exit 1
+fi
+
+# Submit the job to PBS.
+qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -P "${PROJECT}" -I -- /bin/bash
