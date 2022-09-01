@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#
+# Touch all files under the specified directory, recursively.
+#
+
+if [ $# -ne 1 ]; then
+	echo "Usage: $0 <directory>"
+	exit 1
+fi
+
+
+find "$1" -exec touch {} \;
