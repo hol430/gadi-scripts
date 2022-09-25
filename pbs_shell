@@ -51,5 +51,18 @@ then
 	exit 1
 fi
 
+PROJECTS="vl59 hw83"
+STORAGE=
+for PROJ in $PROJECTS
+do
+	ADDITION="gdata/${PROJ}+scratch/${PROJ}"
+	if [ -z "${STORAGE}" ]
+	then
+		STORAGE="${ADDITION}"
+	else
+		STORAGE="${STORAGE}+${ADDITION}"
+	fi
+done
+
 # Submit the job to PBS.
-qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -P "${PROJECT}" -I -- /bin/bash
+qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -lstorage=${STORAGE} -P "${PROJECT}" -I -- /bin/bash
