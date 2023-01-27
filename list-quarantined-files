@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# A small shell script which prints all files quarantined by gadi in the format
+# required by the file recovery tool.
+#
+# No arguments are required to run this script.
+#
+# Example Usage:
+#
+# ./list-quarantined-files >quarantine.list
+# nci-file-expiry quarantine.list
+# rm quarantine.list
+#
+set -euo pipefail
+
+nci-file-expiry list-quarantined | tail -n +2 | while IFS=$"\n" read exp
+do
+	uuid=$(echo $exp | cut -d' ' -f1)
+	path=$(echo $exp | cut -d' ' -f6)
+	echo "${uuid} ${path}"
+done

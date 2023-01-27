@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# This shell script will recover all files which have been quarantined on gadi.
+#
+# No arguments are required to run this script.
+#
+#
+set -euo pipefail
+
+tmp="$(mktemp)"
+list-quarantined-files >"${tmp}"
+# This snippet will recreate the directory structure of the expired files.
+# If these directories don't exist, file recovery will fail.
+# cat "${tmp}" | \
+# while IFS=$"\n" read line
+# do
+# 	f="$(echo $line | cut -d' ' -f2)"
+# 	mkdir -p "$(dirname $f)"
+# done
+
+nci-file-expiry batch-recover "${tmp}"
+rm "${tmp}"
