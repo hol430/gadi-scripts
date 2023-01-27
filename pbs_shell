@@ -18,7 +18,7 @@ set -euo pipefail
 NCPU=1
 MEM_GB=8
 WALLTIME=01:00:00
-PROJECT=vl59
+PROJECT=pt17
 
 USAGE="Usage: pbs_shell [-c <num-cpus>] [-m <memory-in-gb>] [-w <walltime>] [-p <project>] [-h]
 
