@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+#
+# This script estimates the cost of PBS jobs on gadi.
+#
+from sys import argv
+from argparse import ArgumentParser
+from enum import Enum
+import traceback
+
+class Queue:
+	"""
+	Queue properties.
+
+	@param name: Name of the queue.
+	@param cpus_per_node: Number of CPUs per node in the queue.
+	@param mem_per_node: Amount of memory (GiB) per node in the queue.
+	@param charge_rate: Charge rate per resource hour.
+	@param walltime_limits: List of pairs of (walltime limit in hours, ncpu) which gives a walltime limit for the given number of CPUs.
+	"""
+	def __init__(self, name: str, charge_rate: float, cpus_per_node: int
+	      , mem_per_node: int, walltime_limits: list[tuple[int, int]]):
+		self.name = name
+		self.cpus_per_node = cpus_per_node
+		self.mem_per_node = mem_per_node
+		self._walltime_limits = walltime_limits
+		self.charge_rate = charge_rate
+
+	def get_walltime_limit(self, ncpu: int):
+		"""
+		Get the maximum walltime allowed for a job in this queue with the given
+		number of CPUs.
+
+		@param ncpu: Number of CPUs used by the hypothetical job.
+		"""
+		max: int = 0
+		for (walltime_limit, cpu_count) in self._walltime_limits:
+			if ncpu <= cpu_count:
+				return walltime_limit
+			max = cpu_count
+		raise ValueError(f"CPU count of {ncpu} exceeds the maximum {max} in queue {self.name}")
+
+class Job:
+	"""
+	Job resource metadata.
+
+	@param ncpu: Number of CPUs.
+	@param mem: Amount of memory (GiB).
+	@param walltime: Amount of walltime (hours).
+	@param queue: PBS queue.
+	"""
+	def __init__(self, ncpu: int, mem: int, walltime: float, queue: Queue):
+		self.ncpu = ncpu
+		self.mem = mem
+		self.walltime = walltime
+		self.queue = queue
+
+class OutputUnits(Enum):
+	HUMAN_READABLE = 0
+	KSU = 1
+	SU = 2
+
+class Options:
+	"""
+	CLI options.
+
+	@param job: Job metadata.
+	@param units: Output units.
+	"""
+	def __init__(self, job: Job, units: OutputUnits):
+		self.job = job
+		self.units = units
+
+def parse_args(argv: list[str]) -> Options:
+	"""
+	Parse CLI arguments, return a parsed options object.
+
+	@param argv: Raw CLI arguments.
+
+	@return Parsed Options object.
+	"""
+	parser = ArgumentParser(prog=argv[0], description = "Estimate PBS job costs on gadi")
+	parser.add_argument("-c", "--cpu-count", type = int, required = True, help = "Number of CPUs")
+	parser.add_argument("-m", "--memory", type = int, required = True, help = "Amount of memory in GiB")
+	parser.add_argument("-w", "--walltime", type = int, required = True, help = "Amount of walltime in hours")
+	parser.add_argument("-q", "--queue", default = _QUEUE_NORMAL, help = f"PBS queue (default: {_QUEUE_NORMAL})")
+
+	group = parser.add_mutually_exclusive_group()
+	group.add_argument("-k", "--ksu", action = "store_true", default = False, help = "Report cost in KSUs")
+	group.add_argument("-s", "--su", action = "store_true", default = False, help = "Report output in SUs")
+	group.add_argument("-H", "--human-readable", action = "store_true", default = True, help = "Report output in human-readable units (ie units vary with magnitude)")
+
+	p = parser.parse_args(argv[1:])
+	queue = _get_queue(p.queue)
+	units = OutputUnits.HUMAN_READABLE
+	if p.ksu:
+		units = OutputUnits.KSU
+	elif p.su:
+		units = OutputUnits.SU
+	job = Job(p.cpu_count, p.memory, p.walltime, queue)
+	return Options(job, units)
+
+_QUEUE_NORMAL = "normal"
+
+_queues = [
+	Queue(_QUEUE_NORMAL, 2, 48, 192, [(48, 672), (24, 1440), (10, 2976), (5, 20736)]),
+	Queue("express", 6, 48, 192, [(24, 48), (5, 3168)]),
+	Queue("hugemem", 3, 48, 1470, [(48, 48), (24, 96), (5, 192)]),
+	Queue("megamem", 5, 48, 2990, [(48, 48), (24, 96)]),
+	Queue("gpuvolta", 3, 12, 382, [(48, 96), (24, 192), (5, 960)]),
+	Queue("normalbw", 1.25, 28, 256, [(48, 336), (24, 840), (10, 1736), (5, 10080)]),
+	Queue("expressbw", 3.75, 28, 256, [(24, 280), (5, 1848)]),
+	Queue("normalsl", 1.5, 32, 192, [(48, 288), (24, 608), (10, 1984), (5, 3200)]),
+	Queue("hugemembw", 1.25, 28, 1020, [(48, 28), (12, 140)]),
+	Queue("megamembw", 1.25, 64, 3000, [(48, 32), (12, 64)]),
+	Queue("copyq", 2, 1, 192, [(1, 10)]),
+	Queue("dgxa100", 4.5, 16, 2000, [(48, 128), (5, 256)]),
+	Queue("normalsr", 2, 104, 500, [(48, 1040), (24, 2080), (10, 4160), (5, 10400)]),
+	Queue("expresssr", 6, 104, 500, [(24, 1040), (5, 2080)]),
+]
+
+def _get_queue(name: str) -> Queue:
+	"""
+	Get the queue with the given name. Throw if not found.
+	"""
+	for queue in _queues:
+		if queue.name == name:
+			return queue
+	raise ValueError(f"Unknown queue: '{name}'")
+
+def get_cost(job: Job) -> float:
+	"""
+	Estimate the cost of a PBS job on gadi. Return the cost in KSUs.
+
+	@param opts: Job options.
+	"""
+	walltime_limit = job.queue.get_walltime_limit(job.ncpu)
+	if job.walltime > walltime_limit:
+		raise ValueError("Walltime of {job.walltime} hours exceeds {queue.name} queue's maximum walltime, which is {walltime_limit} hours for {job.ncpu} CPUs")
+
+	cpu_ratio = job.queue.cpus_per_node / job.ncpu
+	mem_ratio = job.mem / job.queue.mem_per_node
+	res2 = job.ncpu * max(1, cpu_ratio * mem_ratio)
+
+	cost_su = job.walltime * res2 * job.queue.charge_rate
+	return cost_su / 1000
+
+def main(opts: Options):
+	"""
+	Main CLI entrypoint function.
+	"""
+	cost = get_cost(opts.job)
+	units = "KSU"
+	if opts.units == OutputUnits.SU:
+		cost *= 1000
+		units = "SU"
+	if opts.units == OutputUnits.HUMAN_READABLE and cost < 1000:
+		cost *= 1000
+		units = "SU"
+	print(f"{cost} {units}")
+
+if __name__ == "__main__":
+	# Parse CLI args
+	opts = parse_args(argv)
+
+	try:
+		# Actual logic is in main().
+		main(opts)
+	except BaseException as error:
+		# Basic error handling.
+		print(traceback.format_exc())
+		exit(1)
