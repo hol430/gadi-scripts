@@ -19,8 +19,9 @@ NCPU=1
 MEM_GB=8
 WALLTIME=01:00:00
 PROJECT=pt17
+QUEUE=normal
 
-USAGE="Usage: pbs_shell [-c <num-cpus>] [-m <memory-in-gb>] [-w <walltime>] [-p <project>] [-h]
+USAGE="Usage: pbs_shell [-c <num-cpus>] [-m <memory-in-gb>] [-w <walltime>] [-p <project>] [-q <queue>] [-h]
 
 Options:
 
@@ -28,15 +29,17 @@ Options:
 -m:		Desired memory allocation, in GB (default: ${MEM_GB})
 -w:		Maximum walltime, in hh:mm:ss (default: ${WALLTIME})
 -p:		Project allocation to be used for the job (default: ${PROJECT})
+-q:		Run the job in the specified queue (default: ${QUEUE})
 -h:		Display this help info"
 
 # Parse the command line arguments
-while getopts ":c:m:w:p:h" opt; do
+while getopts ":c:m:w:p:q:h" opt; do
     case $opt in
 	c ) NCPU=${OPTARG}; test ${NCPU} -gt 0 2>/dev/null || (echo -e "Invalid number of cpus: ${NCPU}\n${USAGE}"; exit 1) ;;
 	m ) MEM_GB=${OPTARG}; test ${MEM_GB} -gt 0 2>/dev/null || (echo -e "Invalid amount of memory: ${MEM_GB}\n${USAGE}"; exit 1) ;;
 	w ) WALLTIME=${OPTARG}; [[ "${WALLTIME}" =~ ^[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}$ ]] || (echo -e "Invalid walltime: ${WALLTIME}\n${USAGE}"; exit 1) ;;
 	p ) PROJECT="${OPTARG}" ;;
+	q ) QUEUE="${OPTARG}" ;;
 	h ) echo "${USAGE}"; exit 0 ;;
 	? ) echo -e "Unknown option ${OPTARG}\n${USAGE}"; exit 1
     esac
@@ -65,4 +68,4 @@ do
 done
 
 # Submit the job to PBS.
-qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -lstorage=${STORAGE} -P "${PROJECT}" -I -- /bin/bash
+qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -lstorage=${STORAGE} -P "${PROJECT}" -q "${QUEUE}" -I -- /bin/bash
