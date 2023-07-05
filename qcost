@@ -153,7 +153,7 @@ def main(opts: Options):
 	if opts.units == OutputUnits.SU:
 		cost *= 1000
 		units = "SU"
-	if opts.units == OutputUnits.HUMAN_READABLE and cost < 1000:
+	if opts.units == OutputUnits.HUMAN_READABLE and cost < 1:
 		cost *= 1000
 		units = "SU"
 	print(f"{cost} {units}")
