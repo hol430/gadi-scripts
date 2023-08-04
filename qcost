@@ -135,7 +135,7 @@ def get_cost(job: Job) -> float:
 	"""
 	walltime_limit = job.queue.get_walltime_limit(job.ncpu)
 	if job.walltime > walltime_limit:
-		raise ValueError("Walltime of {job.walltime} hours exceeds {queue.name} queue's maximum walltime, which is {walltime_limit} hours for {job.ncpu} CPUs")
+		raise ValueError(f"Walltime of {job.walltime} hours exceeds {job.queue.name} queue's maximum walltime, which is {walltime_limit} hours for {job.ncpu} CPUs")
 
 	cpu_ratio = job.queue.cpus_per_node / job.ncpu
 	mem_ratio = job.mem / job.queue.mem_per_node
