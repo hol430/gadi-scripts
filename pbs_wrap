@@ -185,7 +185,7 @@ write_output "#!/usr/bin/env bash
 # Optional email notifications.
 if [ ${EMAIL_NOTIFY} = 1 ]
 then
-    write_output "#PBS -m ${EMAIL_FLAG}
+    write_output "#PBS -m abe
 #PBS -M ${EMAIL}"
 fi
 
