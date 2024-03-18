@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+
+#
+# This script generates a wrapper script around the specified command.
+#
+# The wrapper script will, when run, submit a job to PBS which runs the command.
+#
+
+# Fail immediately if any command fails.
+set -euo pipefail
+
+# If environment variable DEBUG is set to 1, run in debug mode.
+if [ "${DEBUG:-}" = 1 ]
+then
+  echo "Running in debug mode. Set DEBUG to 0 to disable."
+  set -x
+fi
+
+################################################################################
+# Parsing of user inputs
+################################################################################
+
+# Number of CPUs to use.
+CPU_COUNT="${CPU_COUNT:-1}"
+
+# Amount of memory for the job (GiB).
+MEMORY="${MEMORY:-1}"
+
+# Queue for the job.
+QUEUE="${QUEUE:-normal}"
+
+# Maximum amount of walltime for the job.
+WALLTIME="${WALLTIME:-01:00:00}"
+
+# Name of the project which will pay for the job.
+PROJECT="${PROJECT:-pt17}"
+
+# 1 to receive email notifications for the job. 0 otherwise.
+EMAIL_NOTIFY="${EMAIL_NOTIFY:-0}"
+
+# Email address to which job status updates will be sent.
+EMAIL="${EMAIL:-}"
+
+# Storage to be attached to the job.
+STORAGE="scratch/pt17+scratch/hw83+gdata/hw83"
+
+# Default modules.
+MODULES="netcdf cdo nco moreutils"
+
+# Output file.
+OUT_FILE=
+
+# Log directory.
+LOG_DIR=
+
+# Job name.
+JOB_NAME=
+
+# Usage information.
+SCRIPT_NAME="$(basename "${0}")"
+USAGE="Usage: ${SCRIPT_NAME} -o <out file> [-c <cpu count>] [-m <memory>] [-q <queue>] [-w <walltime>] [-p <project>] [-e <email>] [-l <log dir>] [-n <name>] [-h] -- command [arguments]
+
+    command             The command to be run.
+    arguments           Arguments to the command.
+    --                  Separates arguments to this script from the command to
+                        be run and its arguments.
+
+    -o, --out-file      Path to which the wrapper script will be saved.
+    -c, --cpu-count     Number of CPUs to be allocated to the job (default: 1).
+    -m, --memory        Amount of memory (in GiB) to be allocated to the job
+                        (default: 1).
+    -q, --queue         Queue to which the job should be submitted (default:
+                        normal).
+    -w, --waltime       Maximum amount of walltime allowed for the job in
+                        hh:mm:ss format (default: 01:00:00).
+    -p, --project       Project to be billed for the job (default: pt17).
+    -e, --email         Email address to which notifications will be sent upon
+                        job status changes. If not provided, no notifications
+                        will be sent.
+    -s, --storage       Storage devices to be made accessible to the job runner,
+                        in addition to the defaults, which are:
+                        ${STORAGE}
+    -M, --modules       Space-separated list of modules to be loaded by the job
+                        before execution. Note that most shells will require
+                        these to be quoted when invoking pbs_wrap. This is in
+                        addition to the default modules, which are:
+                        ${MODULES}
+    -l, --log-dir       Directory in which the job's log file will be saved.
+    -n, --name          Name of the job.
+    -h, --help          Print this usage information.
+"
+
+while [ $# -gt 0 ]
+do
+    case "${1}" in
+        -c | --cpu-count    ) CPU_COUNT="${2}"                    ; shift 2 ;;
+        -m | --memory       ) MEMORY="${2}"                       ; shift 2 ;;
+        -q | --queue        ) QUEUE="${2}"                        ; shift 2 ;;
+        -w | --walltime     ) WALLTIME="${2}"                     ; shift 2 ;;
+        -p | --project      ) PROJECT="${2}"                      ; shift 2 ;;
+        -e | --email        ) EMAIL="${2}"; EMAIL_NOTIFY=1        ; shift 2 ;;
+        -s | --storage      ) STORAGE="${STORAGE}+${2}"           ; shift 2 ;;
+        -M | --modules      ) MODULES="${MODULES} ${2}"           ; shift 2 ;;
+        -o | --out-file     ) OUT_FILE="${2}"                     ; shift 2 ;;
+        -l | --log-dir      ) LOG_DIR="${2}"                      ; shift 2 ;;
+        -n | --name         ) JOB_NAME="${2}"                     ; shift 2 ;;
+        --                  ) shift                               ; break   ;;
+        -h | --help         ) echo "${USAGE}" 1>&2                ; exit 0  ;;
+        *                   )                                       break   ;;
+    esac
+done
+
+# Remaining arguments are the command to be run and its arguments.
+CMD="$@"
+
+################################################################################
+# Validation of user inputs
+################################################################################
+
+# This function will print a message ($*) to stderr and exit with nonzero code.
+die() { echo "Error: $*" >&2; exit 1; }
+
+# This function will print a message ($*) to stderr, then print the usage
+# information, then exit with nonzero code.
+die_usage() {
+    echo "Error: $*" >&2
+    echo >&2
+    echo "${USAGE}" >&2
+    exit 1
+}
+
+test -z "${OUT_FILE}" && die_usage "-o/--out-file not set"
+test -z "${CMD}" && die_usage "No command or arguments provided"
+test ${EMAIL_NOTIFY} = 1 -a -z "${EMAIL}" && die_usage "Email address not set"
+
+if [ -z "${JOB_NAME}" ]
+then
+    JOB_NAME="$(basename "${OUT_FILE}")"
+fi
+
+# Get walltime in hours.
+WALLTIME_HOURS="$(echo "${WALLTIME}" | cut -d: -f1)"
+
+# qcost will return non-zero exit code if arguments are invalid (ie CPU count
+# exceeds the maximum allowed for this queue).
+QCOST_LOG="$(mktemp)"
+qcost -c "${CPU_COUNT}" -m "${MEMORY}" -w "${WALLTIME_HOURS}" -q "${QUEUE}" \
+    >"${QCOST_LOG}" 2>&1 || (
+    # qcost returned non-zero status code. We should display its output and exit.
+    QCOST_OUT="$(cat "${QCOST_LOG}")"
+    rm "${QCOST_LOG}"
+    die "${QCOST_OUT}"
+)
+rm "${QCOST_LOG}"
+
+################################################################################
+# Generation of wrapper script
+################################################################################
+
+# Overwrite the output file if it already exists.
+rm -f "${OUT_FILE}"
+
+write_output() {
+    echo "$*" >>"${OUT_FILE}"
+}
+
+# Write the PBS directives to the wrapper script.
+write_output "#!/usr/bin/env bash
+#PBS -l ncpus=${CPU_COUNT}
+#PBS -l walltime=${WALLTIME}
+#PBS -l mem=${MEMORY}GB
+#PBS -q ${QUEUE}
+#PBS -l wd
+#PBS -j oe
+#PBS -l storage=${STORAGE}"
+
+# Optional email notifications.
+if [ ${EMAIL_NOTIFY} = 1 ]
+then
+    write_output "#PBS -m ${EMAIL_FLAG}
+#PBS -M ${EMAIL}"
+fi
+
+# Optional custom log file directory.
+if [ -n "${LOG_DIR}" ]
+then
+    # Convert relative path to absolute path.
+    LOG_DIR="$(readlink -f "${LOG_DIR}")"
+
+    # Job will fail if this directory doesn't exist when it starts.
+    mkdir -p "${LOG_DIR}"
+
+    write_output "#PBS -o \"${LOG_DIR}\""
+fi
+
+# Optional custom job name.
+if [ -n "${JOB_NAME}" ]
+then
+    write_output "#PBS -N ${JOB_NAME}"
+fi
+
+# Write the script preamble.
+write_output "
+# Exit immediately if any command fails.
+set -euo pipefail
+
+# Load modules.
+module purge
+module load use.own
+module load ${MODULES}
+
+# Run job."
+
+while [ $# -gt 0 ]
+do
+    # %q printf format will construct quotes or escape chars as required.
+    printf "%q" "${1}" >>"${OUT_FILE}"
+    shift
+
+    # If there is another argument...
+    if [ $# -gt 0 ]
+    then
+        # ...print a space to separate this from the next argument.
+        printf " " >>"${OUT_FILE}"
+    fi
+done
+
+write_output "
+
+# Success!
+echo \"Command finished successfully.\""
+
+# Add execute permission to the script.
+chmod ug+x "${OUT_FILE}"
