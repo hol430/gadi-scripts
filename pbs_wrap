@@ -56,9 +56,13 @@ LOG_DIR=
 # Job name.
 JOB_NAME=
 
+# Colon-separated list of IDs of jobs upon which this job depends. This job will
+# not run until all of the jobs in this list have finished successfully.
+DEPENDENCIES=
+
 # Usage information.
 SCRIPT_NAME="$(basename "${0}")"
-USAGE="Usage: ${SCRIPT_NAME} -o <out file> [-c <cpu count>] [-m <memory>] [-q <queue>] [-w <walltime>] [-p <project>] [-e <email>] [-l <log dir>] [-n <name>] [-h] -- command [arguments]
+USAGE="Usage: ${SCRIPT_NAME} -o <out file> [-c <cpu count>] [-m <memory>] [-q <queue>] [-w <walltime>] [-p <project>] [-e <email>] [-l <log dir>] [-n <name>] [-d <dependencies>] [-h] -- command [arguments]
 
     command             The command to be run.
     arguments           Arguments to the command.
@@ -87,6 +91,9 @@ USAGE="Usage: ${SCRIPT_NAME} -o <out file> [-c <cpu count>] [-m <memory>] [-q <q
                         ${MODULES}
     -l, --log-dir       Directory in which the job's log file will be saved.
     -n, --name          Name of the job.
+    -d, --dependencies  Colon separated list of IDs of jobs upon which this job
+                        depends. This job will not run until all of the jobs in
+                        this list have completed successfully.
     -h, --help          Print this usage information.
 "
 
@@ -104,6 +111,7 @@ do
         -o | --out-file     ) OUT_FILE="${2}"                     ; shift 2 ;;
         -l | --log-dir      ) LOG_DIR="${2}"                      ; shift 2 ;;
         -n | --name         ) JOB_NAME="${2}"                     ; shift 2 ;;
+        -d | --dependencies ) DEPENDENCIES="${2}"                 ; shift 2 ;;
         --                  ) shift                               ; break   ;;
         -h | --help         ) echo "${USAGE}" 1>&2                ; exit 0  ;;
         *                   )                                       break   ;;
@@ -197,6 +205,12 @@ fi
 if [ -n "${JOB_NAME}" ]
 then
     write_output "#PBS -N ${JOB_NAME}"
+fi
+
+# Optional job dependencies.
+if [ -n "${DEPENDENCIES}" ]
+then
+    write_output "#PBS -W depend=afterok:${DEPENDENCIES}"
 fi
 
 # Write the script preamble.
