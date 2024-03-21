@@ -41,6 +41,9 @@ EMAIL_NOTIFY="${EMAIL_NOTIFY:-0}"
 # Email address to which job status updates will be sent.
 EMAIL="${EMAIL:-}"
 
+# Job priority (0-1023).
+PRIORITY=0
+
 # Storage to be attached to the job.
 STORAGE="scratch/pt17+scratch/hw83+gdata/hw83"
 
@@ -62,7 +65,7 @@ DEPENDENCIES=
 
 # Usage information.
 SCRIPT_NAME="$(basename "${0}")"
-USAGE="Usage: ${SCRIPT_NAME} -o <out file> [-c <cpu count>] [-m <memory>] [-q <queue>] [-w <walltime>] [-p <project>] [-e <email>] [-l <log dir>] [-n <name>] [-d <dependencies>] [-h] -- command [arguments]
+USAGE="Usage: ${SCRIPT_NAME} -o <out file> [-c <cpu count>] [-m <memory>] [-q <queue>] [-w <walltime>] [-P <project>] [-e <email>] [-l <log dir>] [-n <name>] [-d <dependencies>] [-p <priority>] [-h] -- command [arguments]
 
     command             The command to be run.
     arguments           Arguments to the command.
@@ -77,7 +80,8 @@ USAGE="Usage: ${SCRIPT_NAME} -o <out file> [-c <cpu count>] [-m <memory>] [-q <q
                         normal).
     -w, --waltime       Maximum amount of walltime allowed for the job in
                         hh:mm:ss format (default: 01:00:00).
-    -p, --project       Project to be billed for the job (default: pt17).
+    -P, --project       Project to be billed for the job (default: pt17).
+    -p, --priority      Job priority in range [0, 1023] (default: 0).
     -e, --email         Email address to which notifications will be sent upon
                         job status changes. If not provided, no notifications
                         will be sent.
@@ -104,7 +108,7 @@ do
         -m | --memory       ) MEMORY="${2}"                       ; shift 2 ;;
         -q | --queue        ) QUEUE="${2}"                        ; shift 2 ;;
         -w | --walltime     ) WALLTIME="${2}"                     ; shift 2 ;;
-        -p | --project      ) PROJECT="${2}"                      ; shift 2 ;;
+        -P | --project      ) PROJECT="${2}"                      ; shift 2 ;;
         -e | --email        ) EMAIL="${2}"; EMAIL_NOTIFY=1        ; shift 2 ;;
         -s | --storage      ) STORAGE="${STORAGE}+${2}"           ; shift 2 ;;
         -M | --modules      ) MODULES="${MODULES} ${2}"           ; shift 2 ;;
@@ -112,6 +116,7 @@ do
         -l | --log-dir      ) LOG_DIR="${2}"                      ; shift 2 ;;
         -n | --name         ) JOB_NAME="${2}"                     ; shift 2 ;;
         -d | --dependencies ) DEPENDENCIES="${2}"                 ; shift 2 ;;
+        -p | --priority     ) PRIORITY="${2}"                     ; shift 2 ;;
         --                  ) shift                               ; break   ;;
         -h | --help         ) echo "${USAGE}" 1>&2                ; exit 0  ;;
         *                   )                                       break   ;;
@@ -141,6 +146,10 @@ test -z "${OUT_FILE}" && die_usage "-o/--out-file not set"
 test -z "${CMD}" && die_usage "No command or arguments provided"
 test ${EMAIL_NOTIFY} = 1 -a -z "${EMAIL}" && die_usage "Email address not set"
 
+echo "${PRIORITY}" | grep -E '[+-]?[0-9]+' >/dev/null 2>&1 || die_usage "Invalid job priority: ${PRIORITY} (not a number)"
+test "${PRIORITY}" -ge 0 || die_usage "Job priority must be greater than or equal to 0"
+test "${PRIORITY}" -le 1023 || die_usage "Job priority must be less than or equal to 1023"
+
 if [ -z "${JOB_NAME}" ]
 then
     JOB_NAME="$(basename "${OUT_FILE}")"
@@ -148,6 +157,14 @@ fi
 
 # Get walltime in hours.
 WALLTIME_HOURS="$(echo "${WALLTIME}" | cut -d: -f1)"
+WALLTIME_MINUTES="$(echo "${WALLTIME}" | cut -d: -f1)"
+WALLTIME_SECONDS="$(echo "${WALLTIME}" | cut -d: -f1)"
+
+# Ensure walltime is provided in hh:mm:ss format.
+if [ -z "${WALLTIME_HOURS}" -o -z "${WALLTIME_MINUTES}" -o -z "${WALLTIME_SECONDS}" ]
+then
+    die "Walltime must be in HH:MM:SS format"
+fi
 
 # qcost will return non-zero exit code if arguments are invalid (ie CPU count
 # exceeds the maximum allowed for this queue).
@@ -180,7 +197,9 @@ write_output "#!/usr/bin/env bash
 #PBS -q ${QUEUE}
 #PBS -l wd
 #PBS -j oe
-#PBS -l storage=${STORAGE}"
+#PBS -l storage=${STORAGE}
+#PBS -p ${PRIORITY}
+#PBS -P ${PROJECT}"
 
 # Optional email notifications.
 if [ ${EMAIL_NOTIFY} = 1 ]
@@ -242,7 +261,8 @@ done
 write_output "
 
 # Success!
-echo \"Command finished successfully.\""
+echo \"Command finished successfully.\"
+"
 
 # Add execute permission to the script.
 chmod ug+x "${OUT_FILE}"
