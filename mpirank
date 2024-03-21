@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+#
+# Print the mpi rank of the node on which the script is running.
+#
+
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+print(comm.rank)
