@@ -20,8 +20,9 @@ MEM_GB=8
 WALLTIME=01:00:00
 PROJECT=pt17
 QUEUE=normal
+IOINTENSIVE=
 
-USAGE="Usage: pbs_shell [-c <num-cpus>] [-m <memory-in-gb>] [-w <walltime>] [-p <project>] [-q <queue>] [-h]
+USAGE="Usage: pbs_shell [-c <num-cpus>] [-m <memory-in-gb>] [-w <walltime>] [-p <project>] [-q <queue>] [-i] [-h]
 
 Options:
 
@@ -30,6 +31,7 @@ Options:
 -w:		Maximum walltime, in hh:mm:ss (default: ${WALLTIME})
 -p:		Project allocation to be used for the job (default: ${PROJECT})
 -q:		Run the job in the specified queue (default: ${QUEUE})
+-i:     Request access to the iointensive filesystem (default: not enabled).
 -h:		Display this help info"
 
 # Parse the command line arguments
@@ -40,6 +42,7 @@ while getopts ":c:m:w:p:q:h" opt; do
 	w ) WALLTIME=${OPTARG}; [[ "${WALLTIME}" =~ ^[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}$ ]] || (echo -e "Invalid walltime: ${WALLTIME}\n${USAGE}"; exit 1) ;;
 	p ) PROJECT="${OPTARG}" ;;
 	q ) QUEUE="${OPTARG}" ;;
+	i ) IOINTENSIVE="-liointensive=1" ;;
 	h ) echo "${USAGE}"; exit 0 ;;
 	? ) echo -e "Unknown option ${OPTARG}\n${USAGE}"; exit 1
     esac
@@ -68,4 +71,4 @@ do
 done
 
 # Submit the job to PBS.
-qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -lstorage=${STORAGE} -P "${PROJECT}" -q "${QUEUE}" -I -- /bin/bash
+qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -lstorage=${STORAGE} "${IOINTENSIVE}" -P "${PROJECT}" -q "${QUEUE}" -I -- /bin/bash
