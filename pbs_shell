@@ -69,7 +69,23 @@ PROJECTS="vl59 hw83 pt17"
 STORAGE=
 for PROJ in $PROJECTS
 do
-	ADDITION="gdata/${PROJ}+scratch/${PROJ}"
+	ADDITION=
+	if [ -d "/g/data/${PROJ}" ]
+	then
+		ADDITION="gdata/${PROJ}"
+	fi
+
+	if [ -d "/scratch/${PROJ}" ]
+	then
+		SCRATCH="scratch/${PROJ}"
+		if [ -z "${ADDITION}" ]
+		then
+			ADDITION="${SCRATCH}"
+		else
+			ADDITION="${ADDITION}+${SCRATCH}"
+		fi
+	fi
+	
 	if [ -z "${STORAGE}" ]
 	then
 		STORAGE="${ADDITION}"
