@@ -13,7 +13,15 @@
 # -h:	Display this help info
 #
 
+# Fail immediately if any command fails.
 set -euo pipefail
+
+# If environment variable DEBUG is set to 1, run in debug mode.
+if [ "${DEBUG:-}" = 1 ]
+then
+  echo "Running in debug mode. Set DEBUG to 0 to disable."
+  set -x
+fi
 
 NCPU=1
 MEM_GB=4
