@@ -197,6 +197,7 @@ write_output "#!/usr/bin/env bash
 #PBS -q ${QUEUE}
 #PBS -l wd
 #PBS -j oe
+#PBS -ry
 #PBS -l storage=${STORAGE}
 #PBS -p ${PRIORITY}
 #PBS -P ${PROJECT}"
