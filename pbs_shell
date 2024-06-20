@@ -16,7 +16,7 @@
 set -euo pipefail
 
 NCPU=1
-MEM_GB=8
+MEM_GB=4
 WALLTIME=01:00:00
 PROJECT=pt17
 QUEUE=normal
