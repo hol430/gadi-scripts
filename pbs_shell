@@ -95,4 +95,4 @@ do
 done
 
 # Submit the job to PBS.
-qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -lstorage=${STORAGE} "${IOINTENSIVE}" -P "${PROJECT}" -q "${QUEUE}" -I -- /bin/bash
+qsub -lncpus=${NCPU} -lmem=${MEM_GB}GB -lwalltime=${WALLTIME} -lstorage=${STORAGE} ${IOINTENSIVE} -P "${PROJECT}" -q "${QUEUE}" -I -- /bin/bash
