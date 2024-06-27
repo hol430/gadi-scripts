@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+#
+# Print the size of MPI_WORLD.
+#
+
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+print(comm.size)
