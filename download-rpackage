@@ -1,0 +1,31 @@
+#!/usr/bin/env Rscript
+
+# Get command-line arguments.
+args <- commandArgs(trailingOnly = TRUE)
+
+if (length(args) < 2) {
+    stop("Usage: download-rpackage <download dir> <package1> [<package2> ...]")
+}
+
+download_dir <- args[1]
+packages <- args[2:length(args)]
+
+cat(paste0(length(packages), " packages to be downloaded to: ", download_dir, "\n"))
+
+# Create download directory if it doesn't already exist.
+dir.create(download_dir, showWarnings = FALSE)
+
+# Get all dependencies
+all_packages <- unique(unlist(tools::package_dependencies(packages, recursive = TRUE, which = c("Depends", "Imports", "LinkingTo"))))
+
+# Include the original packages
+all_packages <- c(packages, all_packages)
+
+# Filter out packages which are already installed.
+installed <- installed.packages()
+all_packages <- all_packages[which(!(all_packages %in% installed))]
+
+# Download the packages and their dependencies
+repo <- "https://cran.csiro.au/"
+cat(paste0("Total number of packages to be downloaded: ", length(all_packages), "\n"))
+r <- download.packages(all_packages, destdir = download_dir, repos = repo)

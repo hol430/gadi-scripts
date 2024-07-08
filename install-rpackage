@@ -1,0 +1,20 @@
+#!/usr/bin/env Rscript
+
+# Get command-line arguments.
+args <- commandArgs(trailingOnly = TRUE)
+
+if (length(args) != 1) {
+    stop("Usage: install-rpackages <download dir>")
+}
+
+download_dir <- args[1]
+
+# Enumerate the packages to be installed.
+packages <- list.files(download_dir, pattern = "\\.tar\\.gz$", full.names = TRUE)
+
+# Installation path.
+lib <- "/scratch/pt17/dh7190/R/libs"
+
+cat(paste0("Number of packages to be installed: ", length(packages), "\n"))
+install.packages(packages, repos = NULL, type = "source", lib = lib)
+
