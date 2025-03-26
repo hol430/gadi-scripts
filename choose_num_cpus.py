@@ -24,12 +24,12 @@ def find_optimal_cpus(N, M, max_multiplier=10):
     Returns:
         list: A sorted list of tuples (CPUs, imbalance), where
               - CPUs is a valid CPU count (multiple of M),
-              - imbalance is the leftover gridcells.
+              - imbalance is the leftover cpus which will be idle at end-of-job.
     """
     results = []
     for k in range(1, max_multiplier + 1):
         cpus = k * M
-        imbalance = N % cpus
+        imbalance = cpus - (N % cpus)
         results.append((cpus, imbalance))
     # Sort by imbalance, then by CPUs (to prioritize fewer CPUs for same imbalance)
     return sorted(results, key=lambda x: (x[1], x[0]))
@@ -51,6 +51,7 @@ def print_optimal_cpus(N, M, max_multiplier=10):
         # Percentage of CPUs effectively utilised.
         efficiency = (N - imbalance) / N * 100
         print(f"{cpus:5} | {imbalance:9} | {efficiency:9.2f}%")
+    print("Imbalance is the number of CPUs left idle at the end of the job while the remaining CPUs run one extra gridcell. This assumes that all gridcells take an equal amount of time to complete.")
 
 if __name__ == "__main__":
     # Total number of gridcells.
